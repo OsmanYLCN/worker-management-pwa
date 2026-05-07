@@ -36,10 +36,12 @@ export function FairControlCenter({
   // Detay Modalı State'i
   const [selectedStandId, setSelectedStandId] = useState<string | null>(null)
   const [deletingItem, setDeletingItem] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   // Gerçek zamanlı saat
   const [now, setNow] = useState(new Date())
   useEffect(() => {
+    setMounted(true)
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
@@ -199,7 +201,11 @@ export function FairControlCenter({
                 </p>
               )}
               {/* Saatlik güncellenen dijital saat */}
-              <span className="text-zinc-600 text-xs font-mono">{now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              {mounted && (
+                <span className="text-zinc-600 text-xs font-mono">
+                  {now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
             </div>
           </div>
         </div>

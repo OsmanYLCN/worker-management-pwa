@@ -163,6 +163,32 @@ export async function createFair(formData: FormData) {
   return { success: true }
 }
 
+export async function updateFair(id: string, data: { name: string; event_date: string; start_time: string; end_time: string }) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('fairs')
+    .update(data)
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+  
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function deleteFair(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('fairs')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+  
+  revalidatePath('/admin')
+  return { success: true }
+}
+
 // --- ASSIGNMENTS ---
 export async function getAssignments(workerId?: string) {
   const supabase = await createClient()

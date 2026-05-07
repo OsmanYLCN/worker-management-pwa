@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   createFair, createTemplate, updateTemplate,
-  deleteTemplate, createWorker, payWorker, deleteWorker, updateWorker
+  deleteTemplate, createWorker, payWorker, deleteWorker, updateWorker,
+  updateFair, deleteFair
 } from '@/app/actions/admin'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,6 +47,18 @@ function formatMinutes(minutes: number) {
   return `${h} sa ${m} dk`
 }
 
+function getFairStatus(fair: any) {
+  const now = new Date()
+  if (!fair.event_date || !fair.start_time || !fair.end_time) return 'legacy'
+  
+  const start = new Date(`${fair.event_date}T${fair.start_time}:00`)
+  const end = new Date(`${fair.event_date}T${fair.end_time}:00`)
+
+  if (now < start) return 'upcoming'
+  if (now > end) return 'ended'
+  return 'live'
+}
+
 // ---------- component ----------
 export function AdminDashboardHub({
   fairs, templates, workers
@@ -56,6 +69,14 @@ export function AdminDashboardHub({
   const [templateOpen, setTemplateOpen] = useState(false)
   const [workerOpen, setWorkerOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Fair Filter & Management
+  const [fairFilter, setFairFilter] = useState<'all' | 'live' | 'upcoming' | 'ended'>('all')
+  const [editFair, setEditFair] = useState<any | null>(null)
+  const [editFairName, setEditFairName] = useState('')
+  const [editFairDate, setEditFairDate] = useState('')
+  const [editFairStartTime, setEditFairStartTime] = useState('')
+  const [editFairEndTime, setEditFairEndTime] = useState('')
 
   // Worker detail & edit modals
   const [detailWorker, setDetailWorker] = useState<any | null>(null)
@@ -77,6 +98,38 @@ export function AdminDashboardHub({
     setLoading(false)
     if (res.success) { toast.success('Fuar oluşturuldu!'); setFairOpen(false) }
     else toast.error(res.error)
+  }
+
+  const handleUpdateFair = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editFair) return
+    setLoading(true)
+    const res = await updateFair(editFair.id, {
+      name: editFairName,
+      event_date: editFairDate,
+      start_time: editFairStartTime,
+      end_time: editFairEndTime
+    })
+    setLoading(false)
+    if (res.success) {
+      toast.success('Fuar güncellendi!')
+      setEditFair(null)
+    } else toast.error(res.error)
+  }
+
+  const handleDeleteFair = async (id: string, name: string) => {
+    if (!confirm(`"${name}" fuarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return
+    const res = await deleteFair(id)
+    if (res.success) toast.success('Fuar silindi.')
+    else toast.error(res.error)
+  }
+
+  const openEditFair = (fair: any) => {
+    setEditFair(fair)
+    setEditFairName(fair.name)
+    setEditFairDate(fair.event_date || '')
+    setEditFairStartTime(fair.start_time || '')
+    setEditFairEndTime(fair.end_time || '')
   }
 
   // ---- Template ----
@@ -164,13 +217,46 @@ export function AdminDashboardHub({
     [workers]
   )
 
+  const filteredFairs = useMemo(() => {
+    if (fairFilter === 'all') return fairs
+    return fairs.filter(f => getFairStatus(f) === fairFilter)
+  }, [fairs, fairFilter])
+
   return (
     <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       {/* FAIRS SECTION */}
       <section>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-medium text-zinc-100 tracking-tight">Mevcut Fuarlar</h2>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-medium text-zinc-100 tracking-tight">Fuarlar</h2>
+            <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60">
+              <button 
+                onClick={() => setFairFilter('all')}
+                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'all' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Tümü
+              </button>
+              <button 
+                onClick={() => setFairFilter('live')}
+                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'live' ? 'bg-emerald-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Canlı
+              </button>
+              <button 
+                onClick={() => setFairFilter('upcoming')}
+                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'upcoming' ? 'bg-amber-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Yaklaşan
+              </button>
+              <button 
+                onClick={() => setFairFilter('ended')}
+                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'ended' ? 'bg-zinc-700 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Geçmiş
+              </button>
+            </div>
+          </div>
           <Dialog open={fairOpen} onOpenChange={setFairOpen}>
             <DialogTrigger render={<Button className="rounded-full shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] bg-indigo-600 hover:bg-indigo-500 text-white transition-all h-10 px-5" />}>
               <Plus className="w-4 h-4 mr-2" /> Yeni Fuar
@@ -207,53 +293,150 @@ export function AdminDashboardHub({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {fairs.length === 0 ? (
+          {filteredFairs.length === 0 ? (
             <div className="col-span-full p-12 text-center text-zinc-500 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800/50">
-              Henüz fuar bulunmuyor. Yeni bir fuar başlatın.
+              {fairFilter === 'all' ? 'Henüz fuar bulunmuyor. Yeni bir fuar başlatın.' : 'Bu kategoride fuar bulunmuyor.'}
             </div>
           ) : (
-            fairs.map((fair) => (
-              <Link key={fair.id} href={`/admin/fairs/${fair.id}`}>
-                <Card className="group cursor-pointer rounded-3xl border-zinc-800/60 bg-zinc-900/40 backdrop-blur-md shadow-lg hover:shadow-indigo-500/10 hover:border-zinc-700 transition-all overflow-hidden relative">
-                  <CardHeader className="bg-zinc-900/20 pb-5 border-b border-zinc-800/60">
-                    <div className="flex justify-between items-start">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform duration-300">
-                        <Calendar className="w-5 h-5" />
-                      </div>
-                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium shadow-sm">
-                        Aktif
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-xl mt-5 font-medium text-zinc-100 line-clamp-1">{fair.name}</CardTitle>
-                    <CardDescription className="text-xs font-light text-zinc-500 flex gap-2 mt-1.5">
-                      {fair.event_date ? (
-                        <>
-                          <span>{new Date(fair.event_date + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                          {(fair.start_time || fair.end_time) && (
-                            <span className="text-zinc-600">· {fair.start_time?.slice(0,5)} – {fair.end_time?.slice(0,5)}</span>
+            filteredFairs.map((fair) => {
+              const status = getFairStatus(fair)
+              return (
+                <div key={fair.id} className="relative group">
+                  <Link href={`/admin/fairs/${fair.id}`}>
+                    <Card className="cursor-pointer rounded-3xl border-zinc-800/60 bg-zinc-900/40 backdrop-blur-md shadow-lg hover:shadow-indigo-500/10 hover:border-zinc-700 transition-all overflow-hidden relative h-full">
+                      <CardHeader className="bg-zinc-900/20 pb-5 border-b border-zinc-800/60">
+                        <div className="flex justify-between items-start">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform duration-300">
+                            <Calendar className="w-5 h-5" />
+                          </div>
+                          
+                          {status === 'live' && (
+                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium shadow-sm">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
+                              Canlı
+                            </Badge>
                           )}
-                        </>
-                      ) : (
-                        <>
-                          <span>{fair.start_date ? new Date(fair.start_date).toLocaleDateString('tr-TR') : '-'}</span>
-                          <span>-</span>
-                          <span>{fair.end_date ? new Date(fair.end_date).toLocaleDateString('tr-TR') : '-'}</span>
-                        </>
-                      )}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-5 flex items-center justify-between text-sm text-zinc-400 font-light group-hover:text-zinc-200 transition-colors">
-                    <span>Kontrol Merkezine Git</span>
-                    <div className="w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                      <ChevronRight className="w-4 h-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))
+                          {status === 'upcoming' && (
+                            <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full font-medium shadow-sm">
+                              Yaklaşan
+                            </Badge>
+                          )}
+                          {status === 'ended' && (
+                            <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 border border-zinc-700 rounded-full font-medium shadow-sm">
+                              Geçmiş
+                            </Badge>
+                          )}
+                          {status === 'legacy' && (
+                            <Badge variant="secondary" className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full font-medium shadow-sm">
+                              Aktif
+                            </Badge>
+                          )}
+                        </div>
+                        <CardTitle className="text-xl mt-5 font-medium text-zinc-100 line-clamp-1">{fair.name}</CardTitle>
+                        <CardDescription className="text-xs font-light text-zinc-500 flex gap-2 mt-1.5">
+                          {fair.event_date ? (
+                            <>
+                              <span>{new Date(fair.event_date + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                              {(fair.start_time || fair.end_time) && (
+                                <span className="text-zinc-600">· {fair.start_time?.slice(0,5)} – {fair.end_time?.slice(0,5)}</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span>{fair.start_date ? new Date(fair.start_date).toLocaleDateString('tr-TR') : '-'}</span>
+                              <span>-</span>
+                              <span>{fair.end_date ? new Date(fair.end_date).toLocaleDateString('tr-TR') : '-'}</span>
+                            </>
+                          )}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-5 flex items-center justify-between text-sm text-zinc-400 font-light group-hover:text-zinc-200 transition-colors">
+                        <span>Kontrol Merkezine Git</span>
+                        <div className="w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                          <ChevronRight className="w-4 h-4" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                  
+                  {/* Fuar Yönetim Butonları (Hover'da görünür) */}
+                  <div className="absolute top-16 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <Button 
+                      variant="ghost" size="icon" 
+                      className="w-8 h-8 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-indigo-400"
+                      onClick={() => openEditFair(fair)}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button 
+                      variant="ghost" size="icon" 
+                      className="w-8 h-8 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-red-400"
+                      onClick={() => handleDeleteFair(fair.id, fair.name)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })
           )}
         </div>
       </section>
+
+      {/* EDIT FAIR MODAL */}
+      <Dialog open={!!editFair} onOpenChange={(o) => !o && setEditFair(null)}>
+        <DialogContent className="sm:max-w-md rounded-3xl bg-zinc-950 border border-zinc-800 text-zinc-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-medium">Fuar Bilgilerini Düzenle</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateFair} className="space-y-5 mt-4">
+            <div className="space-y-2">
+              <Label className="text-zinc-400">Fuar Adı</Label>
+              <Input 
+                value={editFairName} 
+                onChange={e => setEditFairName(e.target.value)} 
+                required 
+                className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400">Tarih</Label>
+              <Input 
+                type="date" 
+                value={editFairDate} 
+                onChange={e => setEditFairDate(e.target.value)} 
+                required 
+                className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-zinc-400">Başlangıç Saati</Label>
+                <Input 
+                  type="time" 
+                  value={editFairStartTime} 
+                  onChange={e => setEditFairStartTime(e.target.value)} 
+                  required 
+                  className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-400">Bitiş Saati</Label>
+                <Input 
+                  type="time" 
+                  value={editFairEndTime} 
+                  onChange={e => setEditFairEndTime(e.target.value)} 
+                  required 
+                  className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
+                />
+              </div>
+            </div>
+            <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
+              {loading ? 'Güncelleniyor...' : 'Fuarı Güncelle'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* TEMPLATES SECTION */}
       <section>
