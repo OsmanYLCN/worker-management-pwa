@@ -202,7 +202,9 @@ export function AdminDashboardHub({
   }
 
   const workerStats = useMemo(() =>
-    workers.map(w => ({ ...w, ...calcWorkerPayment(w) })),
+    workers
+      .filter(w => w.is_active !== false)
+      .map(w => ({ ...w, ...calcWorkerPayment(w) })),
     [workers]
   )
 

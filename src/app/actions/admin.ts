@@ -247,7 +247,7 @@ export async function deleteWorker(workerId: string) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('workers')
-    .delete()
+    .update({ is_active: false, pin: `del_${Date.now()}` })
     .eq('id', workerId)
 
   if (error) return { success: false, error: error.message }
