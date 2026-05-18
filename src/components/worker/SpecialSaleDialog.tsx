@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { Banknote } from 'lucide-react'
+import { Banknote, CreditCard } from 'lucide-react'
 
 interface SpecialSaleDialogProps {
   assignmentId: string;
@@ -27,6 +27,8 @@ export function SpecialSaleDialog({ assignmentId, onSuccess }: SpecialSaleDialog
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
+
+  const [paymentMethod, setPaymentMethod] = useState<'Nakit' | 'IBAN'>('Nakit')
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,6 +43,8 @@ export function SpecialSaleDialog({ assignmentId, onSuccess }: SpecialSaleDialog
       'special-sale',
       'Özel Satış',
       Number(amount),
+      paymentMethod,
+      'Özel Satış',
       description
     )
 
@@ -100,6 +104,27 @@ export function SpecialSaleDialog({ assignmentId, onSuccess }: SpecialSaleDialog
                 onChange={(e) => setDescription(e.target.value)}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400">Ödeme Yöntemi</Label>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`flex-1 h-12 rounded-xl border-zinc-800 flex gap-2 items-center ${paymentMethod === 'Nakit' ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' : 'bg-zinc-900 text-zinc-400'}`}
+                  onClick={() => setPaymentMethod('Nakit')}
+                >
+                  <Banknote className="w-4 h-4" /> Nakit
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`flex-1 h-12 rounded-xl border-zinc-800 flex gap-2 items-center ${paymentMethod === 'IBAN' ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' : 'bg-zinc-900 text-zinc-400'}`}
+                  onClick={() => setPaymentMethod('IBAN')}
+                >
+                  <CreditCard className="w-4 h-4" /> IBAN
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter className="mt-4">

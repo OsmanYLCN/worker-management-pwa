@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import {
   Plus, Calendar, FileJson, ChevronRight,
@@ -33,10 +34,12 @@ function calcWorkerPayment(worker: any) {
     const end = new Date(a.end_time).getTime()
     totalMinutes += Math.max(0, (end - start) / 60000)
   }
+  // Yuvarlama: Küsüratları en yakın 15 dakikaya (.25 sa) yuvarla
   const totalHours = totalMinutes / 60
-  const totalPayment = totalHours * hourlyWage
+  const finalHours = Math.round(totalHours * 4) / 4
+  const totalPayment = finalHours * hourlyWage
 
-  return { totalHours: Math.round(totalHours * 10) / 10, totalPayment: Math.round(totalPayment) }
+  return { totalHours: finalHours, totalPayment: Math.round(totalPayment) }
 }
 
 function formatMinutes(minutes: number) {
@@ -48,15 +51,7 @@ function formatMinutes(minutes: number) {
 }
 
 function getFairStatus(fair: any) {
-  const now = new Date()
-  if (!fair.event_date || !fair.start_time || !fair.end_time) return 'legacy'
-  
-  const start = new Date(`${fair.event_date}T${fair.start_time}:00`)
-  const end = new Date(`${fair.event_date}T${fair.end_time}:00`)
-
-  if (now < start) return 'upcoming'
-  if (now > end) return 'ended'
-  return 'live'
+  return 'live' // Fixed stands are always live
 }
 
 // ---------- component ----------
@@ -74,9 +69,7 @@ export function AdminDashboardHub({
   const [fairFilter, setFairFilter] = useState<'all' | 'live' | 'upcoming' | 'ended'>('all')
   const [editFair, setEditFair] = useState<any | null>(null)
   const [editFairName, setEditFairName] = useState('')
-  const [editFairDate, setEditFairDate] = useState('')
-  const [editFairStartTime, setEditFairStartTime] = useState('')
-  const [editFairEndTime, setEditFairEndTime] = useState('')
+  const [editFairTemplate, setEditFairTemplate] = useState('')
 
   // Worker detail & edit modals
   const [detailWorker, setDetailWorker] = useState<any | null>(null)
@@ -86,7 +79,7 @@ export function AdminDashboardHub({
   const [editWage, setEditWage] = useState('')
 
   // Template state
-  const [templateItems, setTemplateItems] = useState([{ id: '1', name: '', price: 0 }])
+  const [templateItems, setTemplateItems] = useState([{ id: Math.random().toString(36).substring(7), name: '', price: 0, category: 'Genel' }])
   const [templateName, setTemplateName] = useState('')
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
 
@@ -106,9 +99,7 @@ export function AdminDashboardHub({
     setLoading(true)
     const res = await updateFair(editFair.id, {
       name: editFairName,
-      event_date: editFairDate,
-      start_time: editFairStartTime,
-      end_time: editFairEndTime
+      template_id: editFairTemplate
     })
     setLoading(false)
     if (res.success) {
@@ -127,9 +118,7 @@ export function AdminDashboardHub({
   const openEditFair = (fair: any) => {
     setEditFair(fair)
     setEditFairName(fair.name)
-    setEditFairDate(fair.event_date || '')
-    setEditFairStartTime(fair.start_time || '')
-    setEditFairEndTime(fair.end_time || '')
+    setEditFairTemplate(fair.template_id || '')
   }
 
   // ---- Template ----
@@ -149,13 +138,13 @@ export function AdminDashboardHub({
   }
 
   const resetTemplateForm = () => {
-    setTemplateName(''); setTemplateItems([{ id: '1', name: '', price: 0 }])
+    setTemplateName(''); setTemplateItems([{ id: Math.random().toString(36).substring(7), name: '', price: 0, category: 'Genel' }])
     setEditingTemplateId(null); setTemplateOpen(false)
   }
 
   const openEditTemplate = (t: any) => {
     setTemplateName(t.name)
-    setTemplateItems(t.items.map((i: any, idx: number) => ({ id: idx.toString(), name: i.name, price: i.price })))
+    setTemplateItems(t.items.map((i: any) => ({ id: i.id || Math.random().toString(36).substring(7), name: i.name, price: i.price, category: i.category || 'Genel' })))
     setEditingTemplateId(t.id); setTemplateOpen(true)
   }
 
@@ -225,67 +214,36 @@ export function AdminDashboardHub({
   return (
     <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-      {/* FAIRS SECTION */}
+      {/* STANDS SECTION */}
       <section>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-medium text-zinc-100 tracking-tight">Fuarlar</h2>
-            <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60">
-              <button 
-                onClick={() => setFairFilter('all')}
-                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'all' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Tümü
-              </button>
-              <button 
-                onClick={() => setFairFilter('live')}
-                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'live' ? 'bg-emerald-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Canlı
-              </button>
-              <button 
-                onClick={() => setFairFilter('upcoming')}
-                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'upcoming' ? 'bg-amber-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Yaklaşan
-              </button>
-              <button 
-                onClick={() => setFairFilter('ended')}
-                className={`px-3 py-1 text-xs rounded-lg transition-all ${fairFilter === 'ended' ? 'bg-zinc-700 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Geçmiş
-              </button>
-            </div>
+            <h2 className="text-2xl font-medium text-zinc-100 tracking-tight">Stantlar</h2>
           </div>
           <Dialog open={fairOpen} onOpenChange={setFairOpen}>
             <DialogTrigger render={<Button className="rounded-full shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] bg-indigo-600 hover:bg-indigo-500 text-white transition-all h-10 px-5" />}>
-              <Plus className="w-4 h-4 mr-2" /> Yeni Fuar
+              <Plus className="w-4 h-4 mr-2" /> Yeni Stant
             </DialogTrigger>
             <DialogContent className="sm:max-w-md rounded-3xl bg-zinc-950 border border-zinc-800 text-zinc-100">
               <DialogHeader>
-                <DialogTitle className="text-xl font-medium">Yeni Fuar Başlat</DialogTitle>
+                <DialogTitle className="text-xl font-medium">Yeni Stant Oluştur</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleCreateFair} className="space-y-5 mt-4">
                 <div className="space-y-2">
-                  <Label className="text-zinc-400">Fuar Adı</Label>
-                  <Input name="name" placeholder="Örn: İzmir Kitap Fuarı" required className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500" />
+                  <Label className="text-zinc-400">Stant Adı</Label>
+                  <Input name="name" placeholder="Örn: Ana Stant" required className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-zinc-400">Tarih</Label>
-                  <Input name="event_date" type="date" required className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-zinc-400">Başlangıç Saati</Label>
-                    <Input name="start_time" type="time" required className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-zinc-400">Bitiş Saati</Label>
-                    <Input name="end_time" type="time" required className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" />
-                  </div>
+                  <Label className="text-zinc-400">Çizelge (Template)</Label>
+                  <select name="template_id" required className="flex h-10 w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ring-offset-zinc-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                    <option value="">Çizelge Seçin...</option>
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <Button type="submit" disabled={loading} className="w-full rounded-xl mt-4 h-12 text-md font-medium bg-indigo-600 hover:bg-indigo-500 text-white">
-                  {loading ? 'Oluşturuluyor...' : 'Fuarı Oluştur'}
+                  {loading ? 'Oluşturuluyor...' : 'Stant Oluştur'}
                 </Button>
               </form>
             </DialogContent>
@@ -295,7 +253,7 @@ export function AdminDashboardHub({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredFairs.length === 0 ? (
             <div className="col-span-full p-12 text-center text-zinc-500 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800/50">
-              {fairFilter === 'all' ? 'Henüz fuar bulunmuyor. Yeni bir fuar başlatın.' : 'Bu kategoride fuar bulunmuyor.'}
+              Henüz stant bulunmuyor. Yeni bir stant oluşturun.
             </div>
           ) : (
             filteredFairs.map((fair) => {
@@ -311,22 +269,6 @@ export function AdminDashboardHub({
                           </div>
                           
                           {status === 'live' && (
-                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium shadow-sm">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
-                              Canlı
-                            </Badge>
-                          )}
-                          {status === 'upcoming' && (
-                            <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full font-medium shadow-sm">
-                              Yaklaşan
-                            </Badge>
-                          )}
-                          {status === 'ended' && (
-                            <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 border border-zinc-700 rounded-full font-medium shadow-sm">
-                              Geçmiş
-                            </Badge>
-                          )}
-                          {status === 'legacy' && (
                             <Badge variant="secondary" className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full font-medium shadow-sm">
                               Aktif
                             </Badge>
@@ -334,19 +276,10 @@ export function AdminDashboardHub({
                         </div>
                         <CardTitle className="text-xl mt-5 font-medium text-zinc-100 line-clamp-1">{fair.name}</CardTitle>
                         <CardDescription className="text-xs font-light text-zinc-500 flex gap-2 mt-1.5">
-                          {fair.event_date ? (
-                            <>
-                              <span>{new Date(fair.event_date + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                              {(fair.start_time || fair.end_time) && (
-                                <span className="text-zinc-600">· {fair.start_time?.slice(0,5)} – {fair.end_time?.slice(0,5)}</span>
-                              )}
-                            </>
+                          {fair.template ? (
+                            <span>{fair.template.name}</span>
                           ) : (
-                            <>
-                              <span>{fair.start_date ? new Date(fair.start_date).toLocaleDateString('tr-TR') : '-'}</span>
-                              <span>-</span>
-                              <span>{fair.end_date ? new Date(fair.end_date).toLocaleDateString('tr-TR') : '-'}</span>
-                            </>
+                            <span>Çizelge seçilmemiş</span>
                           )}
                         </CardDescription>
                       </CardHeader>
@@ -387,11 +320,11 @@ export function AdminDashboardHub({
       <Dialog open={!!editFair} onOpenChange={(o) => !o && setEditFair(null)}>
         <DialogContent className="sm:max-w-md rounded-3xl bg-zinc-950 border border-zinc-800 text-zinc-100">
           <DialogHeader>
-            <DialogTitle className="text-xl font-medium">Fuar Bilgilerini Düzenle</DialogTitle>
+            <DialogTitle className="text-xl font-medium">Stant Bilgilerini Düzenle</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdateFair} className="space-y-5 mt-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400">Fuar Adı</Label>
+              <Label className="text-zinc-400">Stant Adı</Label>
               <Input 
                 value={editFairName} 
                 onChange={e => setEditFairName(e.target.value)} 
@@ -400,39 +333,21 @@ export function AdminDashboardHub({
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400">Tarih</Label>
-              <Input 
-                type="date" 
-                value={editFairDate} 
-                onChange={e => setEditFairDate(e.target.value)} 
+              <Label className="text-zinc-400">Çizelge (Template)</Label>
+              <select 
+                value={editFairTemplate}
+                onChange={e => setEditFairTemplate(e.target.value)}
                 required 
-                className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-zinc-400">Başlangıç Saati</Label>
-                <Input 
-                  type="time" 
-                  value={editFairStartTime} 
-                  onChange={e => setEditFairStartTime(e.target.value)} 
-                  required 
-                  className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-400">Bitiş Saati</Label>
-                <Input 
-                  type="time" 
-                  value={editFairEndTime} 
-                  onChange={e => setEditFairEndTime(e.target.value)} 
-                  required 
-                  className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 [color-scheme:dark]" 
-                />
-              </div>
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ring-offset-zinc-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Çizelge Seçin...</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
             </div>
             <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
-              {loading ? 'Güncelleniyor...' : 'Fuarı Güncelle'}
+              {loading ? 'Güncelleniyor...' : 'Stant Güncelle'}
             </Button>
           </form>
         </DialogContent>
@@ -458,24 +373,44 @@ export function AdminDashboardHub({
                 <div className="space-y-4 pt-2">
                   <Label className="text-zinc-400">Satış Kalemleri (Butonlar)</Label>
                   {templateItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <Input placeholder="Ürün (Boyama vb.)" value={item.name}
-                        onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i))}
-                        className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 flex-1" />
-                      <div className="relative w-28">
-                        <Input type="number" placeholder="Fiyat" value={item.price || ''}
-                          onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, price: Number(e.target.value) } : i))}
-                          className="rounded-xl bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 w-full pr-8" />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">₺</span>
+                    <div key={item.id} className="flex flex-col gap-2 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/60">
+                      <div className="flex items-center gap-3">
+                        <div className="w-[120px] shrink-0">
+                          <Select 
+                            value={item.category || 'Genel'} 
+                            onValueChange={(val) => val && setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, category: val } : i))}
+                          >
+                            <SelectTrigger className="h-10 rounded-lg bg-zinc-900 border-zinc-800 text-xs text-zinc-300 focus:ring-indigo-500">
+                              <SelectValue placeholder="Kategori" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100 text-xs">
+                              <SelectItem value="Genel">Genel</SelectItem>
+                              <SelectItem value="Boyama">Boyama</SelectItem>
+                              <SelectItem value="Peluş">Peluş</SelectItem>
+                              <SelectItem value="Balon">Balon</SelectItem>
+                              <SelectItem value="Taç">Taç</SelectItem>
+                              <SelectItem value="Özel">Özel</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Input placeholder="Ürün Adı" value={item.name}
+                          onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i))}
+                          className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 flex-1 text-sm" />
+                        <div className="relative w-24">
+                          <Input type="number" placeholder="Fiyat" value={item.price || ''}
+                            onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, price: Number(e.target.value) } : i))}
+                            className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 w-full pr-7 text-sm" />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">₺</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg w-8 h-8 shrink-0"
+                          onClick={() => { if (templateItems.length > 1) setTemplateItems(items => items.filter(i => i.id !== item.id)) }}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button type="button" variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400 hover:bg-red-950/30 rounded-xl w-10 h-10 shrink-0"
-                        onClick={() => { if (templateItems.length > 1) setTemplateItems(items => items.filter(i => i.id !== item.id)) }}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                   ))}
                   <Button type="button" variant="outline" className="w-full rounded-xl border-dashed border-zinc-800 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 transition-colors h-12"
-                    onClick={() => setTemplateItems([...templateItems, { id: Date.now().toString(), name: '', price: 0 }])}>
+                    onClick={() => setTemplateItems([...templateItems, { id: Math.random().toString(36).substring(7), name: '', price: 0, category: 'Genel' }])}>
                     <Plus className="w-4 h-4 mr-2" /> Kalem Ekle
                   </Button>
                 </div>
@@ -516,6 +451,7 @@ export function AdminDashboardHub({
                     {template.items?.map((item: any, i: number) => (
                       <Badge key={i} variant="secondary" className="rounded-lg bg-zinc-800/50 text-zinc-300 border border-zinc-700/50 font-light px-2.5 py-1">
                         {item.name} <span className="text-zinc-500 ml-1.5 font-medium">{item.price}₺</span>
+                        {item.category && <span className="text-indigo-400/70 ml-1 text-[10px] uppercase">({item.category})</span>}
                       </Badge>
                     ))}
                   </div>

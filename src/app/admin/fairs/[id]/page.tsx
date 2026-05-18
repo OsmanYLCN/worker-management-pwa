@@ -10,7 +10,7 @@ export default async function FairPage({ params }: { params: Promise<{ id: strin
   // 1. Get Fair details
   const { data: fair } = await supabase
     .from('fairs')
-    .select('*')
+    .select('*, template:templates(*)')
     .eq('id', resolvedParams.id)
     .single()
 
@@ -35,16 +35,15 @@ export default async function FairPage({ params }: { params: Promise<{ id: strin
   // Actually, we should get transactions that belong to this fair.
   // The simplest way: fetch transactions whose worker_id is in activeAssignments and created_at > assignment.start_time
   // But for simple demo, just fetch all transactions for the workers in this fair where created_at > fair.start_date
-  const workerIds = activeAssignments.map((a: any) => a.worker_id)
+  const assignmentIds = activeAssignments.map((a: any) => a.id)
   
   let transactions: any[] = []
-  if (workerIds.length > 0) {
+  if (assignmentIds.length > 0) {
     const { data: txs } = await supabase
       .from('transactions')
       .select('*')
-      .in('worker_id', workerIds)
+      .in('assignment_id', assignmentIds)
       .order('created_at', { ascending: false })
-      .limit(100)
       
     // Map worker names to transactions
     transactions = txs?.map(tx => {

@@ -24,7 +24,7 @@ export async function getWorkersWithStats() {
       id, name, pin, hourly_wage, is_active, created_at,
       assignments(
         id, start_time, end_time, is_paid,
-        fairs(id, name, event_date, start_time, end_time),
+        fairs(id, name, template_id),
         templates(id, name)
       )
     `)
@@ -137,7 +137,10 @@ export async function getFairs() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('fairs')
-    .select('*')
+    .select(`
+      *,
+      template:templates(id, name)
+    `)
     .order('created_at', { ascending: false })
   
   if (error) return { success: false, error: error.message }
@@ -147,15 +150,13 @@ export async function getFairs() {
 export async function createFair(formData: FormData) {
   const supabase = await createClient()
   const name = formData.get('name') as string
-  const event_date = formData.get('event_date') as string
-  const start_time = formData.get('start_time') as string
-  const end_time = formData.get('end_time') as string
+  const template_id = formData.get('template_id') as string
 
-  if (!name || !event_date || !start_time || !end_time) return { success: false, error: 'Tüm alanlar zorunludur' }
+  if (!name || !template_id) return { success: false, error: 'Stant adı ve çizelge seçimi zorunludur' }
 
   const { error } = await supabase
     .from('fairs')
-    .insert({ name, event_date, start_time, end_time })
+    .insert({ name, template_id })
 
   if (error) return { success: false, error: error.message }
 
@@ -163,7 +164,7 @@ export async function createFair(formData: FormData) {
   return { success: true }
 }
 
-export async function updateFair(id: string, data: { name: string; event_date: string; start_time: string; end_time: string }) {
+export async function updateFair(id: string, data: { name: string; template_id: string }) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('fairs')
@@ -212,31 +213,7 @@ export async function getAssignments(workerId?: string) {
   return { success: true, data }
 }
 
-export async function assignWorker(workerId: string, fairId: string, templateId: string) {
-  const supabase = await createClient()
-  
-  // Önce aktif görevlendirmesi var mı kontrol et, varsa kapat
-  await supabase
-    .from('assignments')
-    .update({ end_time: new Date().toISOString() })
-    .eq('worker_id', workerId)
-    .is('end_time', null)
-
-  // Yeni görevlendirme ekle
-  const { error } = await supabase
-    .from('assignments')
-    .insert({
-      worker_id: workerId,
-      fair_id: fairId,
-      template_id: templateId,
-      start_time: new Date().toISOString()
-    })
-
-  if (error) return { success: false, error: error.message }
-  
-  revalidatePath('/admin')
-  return { success: true }
-}
+// Manuel atama işlemi kaldırıldı. Çalışanlar kendileri mesai başlatacak.
 
 export async function endAssignment(assignmentId: string) {
   const supabase = await createClient()
@@ -247,47 +224,6 @@ export async function endAssignment(assignmentId: string) {
 
   if (error) return { success: false, error: error.message }
   revalidatePath('/admin')
-  return { success: true }
-}
-
-export async function addWorkerToFair(fairId: string, templateId: string, workerData: { id?: string, name?: string, pin?: string }) {
-  const supabase = await createClient()
-  let finalWorkerId = workerData.id
-
-  // Eğer yeni çalışan yaratılıyorsa
-  if (!finalWorkerId && workerData.name && workerData.pin) {
-    const { data: newWorker, error: wError } = await supabase
-      .from('workers')
-      .insert({ name: workerData.name, pin: workerData.pin })
-      .select('id')
-      .single()
-      
-    if (wError) return { success: false, error: wError.message }
-    finalWorkerId = newWorker.id
-  }
-
-  if (!finalWorkerId) return { success: false, error: 'Çalışan bilgisi eksik.' }
-
-  // Varsa eski görevini bitir
-  await supabase
-    .from('assignments')
-    .update({ end_time: new Date().toISOString() })
-    .eq('worker_id', finalWorkerId)
-    .is('end_time', null)
-
-  // Yeni fuara ata
-  const { error: aError } = await supabase
-    .from('assignments')
-    .insert({
-      worker_id: finalWorkerId,
-      fair_id: fairId,
-      template_id: templateId,
-      start_time: new Date().toISOString()
-    })
-
-  if (aError) return { success: false, error: aError.message }
-  
-  revalidatePath(`/admin/fairs/${fairId}`)
   return { success: true }
 }
 
