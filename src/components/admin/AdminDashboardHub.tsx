@@ -292,8 +292,8 @@ export function AdminDashboardHub({
                     </Card>
                   </Link>
                   
-                  {/* Fuar Yönetim Butonları (Hover'da görünür) */}
-                  <div className="absolute top-16 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  {/* Fuar Yönetim Butonları (Mobil cihazlarda hep görünür) */}
+                  <div className="absolute top-16 right-4 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
                     <Button 
                       variant="ghost" size="icon" 
                       className="w-8 h-8 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-indigo-400"
@@ -373,9 +373,9 @@ export function AdminDashboardHub({
                 <div className="space-y-4 pt-2">
                   <Label className="text-zinc-400">Satış Kalemleri (Butonlar)</Label>
                   {templateItems.map((item) => (
-                    <div key={item.id} className="flex flex-col gap-2 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/60">
-                      <div className="flex items-center gap-3">
-                        <div className="w-[120px] shrink-0">
+                    <div key={item.id} className="flex flex-col gap-3 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/60">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="w-full sm:w-[120px] shrink-0">
                           <Select 
                             value={item.category || 'Genel'} 
                             onValueChange={(val) => val && setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, category: val } : i))}
@@ -395,17 +395,19 @@ export function AdminDashboardHub({
                         </div>
                         <Input placeholder="Ürün Adı" value={item.name}
                           onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, name: e.target.value } : i))}
-                          className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 flex-1 text-sm" />
-                        <div className="relative w-24">
-                          <Input type="number" placeholder="Fiyat" value={item.price || ''}
-                            onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, price: Number(e.target.value) } : i))}
-                            className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 w-full pr-7 text-sm" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">₺</span>
+                          className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 w-full sm:flex-1 text-sm" />
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <div className="relative flex-1 sm:w-24">
+                            <Input type="number" placeholder="Fiyat" value={item.price || ''}
+                              onChange={(e) => setTemplateItems(items => items.map(i => i.id === item.id ? { ...i, price: Number(e.target.value) } : i))}
+                              className="rounded-lg bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500 w-full pr-7 text-sm" />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">₺</span>
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg w-10 h-10 shrink-0"
+                            onClick={() => { if (templateItems.length > 1) setTemplateItems(items => items.filter(i => i.id !== item.id)) }}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
-                        <Button type="button" variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg w-8 h-8 shrink-0"
-                          onClick={() => { if (templateItems.length > 1) setTemplateItems(items => items.filter(i => i.id !== item.id)) }}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -437,7 +439,7 @@ export function AdminDashboardHub({
                     </div>
                     <CardTitle className="text-lg font-medium text-zinc-100">{template.name}</CardTitle>
                   </div>
-                  <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-full" onClick={() => openEditTemplate(template)}>
                       <Edit2 className="w-4 h-4" />
                     </Button>
@@ -529,7 +531,7 @@ export function AdminDashboardHub({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost" size="icon"
                       className="h-8 w-8 text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-full"

@@ -227,7 +227,7 @@ export function WorkerDashboard({
         {/* Column header */}
         <div className="flex items-center px-4 py-1">
           <span className="flex-1 text-[10px] font-medium text-zinc-600 uppercase tracking-widest">Ürün</span>
-          <span className="w-20 text-center text-[10px] font-medium text-zinc-600 uppercase tracking-widest">Fiyat</span>
+          <span className="hidden sm:block w-20 text-center text-[10px] font-medium text-zinc-600 uppercase tracking-widest">Fiyat</span>
           <span className="w-16 text-center text-[10px] font-medium text-zinc-600 uppercase tracking-widest">Adet</span>
           <span className="w-12" />
         </div>
@@ -247,7 +247,7 @@ export function WorkerDashboard({
               </div>
 
               {/* Unit price badge */}
-              <div className="w-20 text-center">
+              <div className="hidden sm:block w-20 text-center">
                 <span className="text-sm font-medium text-zinc-400">{item.price} ₺</span>
               </div>
 
