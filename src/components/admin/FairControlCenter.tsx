@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { endAssignment } from '@/app/actions/admin'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, ArrowLeft, StopCircle, FileJson, Store, UserCircle2, BarChart3 } from 'lucide-react'
+import { Calendar, ArrowLeft, StopCircle, FileJson, Store, UserCircle2, BarChart3, Minus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { StatsModal } from '@/components/admin/StatsModal'
@@ -75,6 +75,39 @@ export function FairControlCenter({
       toast.success('Çalışan sahadan çekildi.')
       setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, end_time: new Date().toISOString() } : a))
     } else toast.error(res.error)
+  }
+
+  const handleDeleteLastItemTransaction = async (itemId: string, itemName: string) => {
+    if (!confirm(`${itemName} için en son yapılan satışı iptal etmek istediğinize emin misiniz?`)) return
+    
+    // Find the most recent transaction for this item in the filtered list
+    const txToDelete = filteredTransactions.find(tx => tx.item_id === itemId || tx.item_name === itemName)
+    if (!txToDelete) {
+      toast.error('İptal edilecek satış bulunamadı.')
+      return
+    }
+
+    const { error } = await supabase.from('transactions').delete().eq('id', txToDelete.id)
+    if (error) {
+      toast.error('İptal edilirken hata oluştu: ' + error.message)
+    } else {
+      toast.success(`${itemName} satışı iptal edildi.`)
+      setTransactions(prev => prev.filter(t => t.id !== txToDelete.id))
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate([50, 50])
+    }
+  }
+
+  const handleDeleteSpecificTransaction = async (txId: string) => {
+    if (!confirm('Bu işlemi tamamen silmek istediğinize emin misiniz?')) return
+    
+    const { error } = await supabase.from('transactions').delete().eq('id', txId)
+    if (error) {
+      toast.error('Silinirken hata oluştu: ' + error.message)
+    } else {
+      toast.success('İşlem silindi.')
+      setTransactions(prev => prev.filter(t => t.id !== txId))
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate([50, 50])
+    }
   }
 
   // ✅ FIX: Artık UTC yerine yerel tarihe göre filtreleme
@@ -286,10 +319,19 @@ export function FairControlCenter({
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="flex items-center gap-3 text-right">
                           <p className={`text-lg font-medium ${item.count > 0 ? 'text-indigo-400' : 'text-zinc-600'}`}>
                             {item.total.toLocaleString('tr-TR')} ₺
                           </p>
+                          {item.count > 0 && (
+                            <button
+                              onClick={() => handleDeleteLastItemTransaction(item.id, item.name)}
+                              className="w-9 h-9 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 hover:text-red-300 transition-colors flex-shrink-0"
+                              title="Son Satışı İptal Et"
+                            >
+                              <Minus className="w-4 h-4" strokeWidth={2.5} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))
@@ -332,8 +374,15 @@ export function FairControlCenter({
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-2">
                       <p className="text-sm font-medium text-emerald-400">+{Number(tx.amount).toLocaleString('tr-TR')} ₺</p>
+                      <button
+                        onClick={() => handleDeleteSpecificTransaction(tx.id)}
+                        className="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                        title="İşlemi Sil"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))
