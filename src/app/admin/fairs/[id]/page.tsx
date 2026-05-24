@@ -41,15 +41,20 @@ export default async function FairPage({ params }: { params: Promise<{ id: strin
   if (assignmentIds.length > 0) {
     const { data: txs } = await supabase
       .from('transactions')
-      .select('*')
+      .select(`
+        *,
+        assignments(
+          workers(name)
+        )
+      `)
       .in('assignment_id', assignmentIds)
       .order('created_at', { ascending: false })
       
-    // Map worker names to transactions
-    transactions = txs?.map(tx => {
-      const wName = (activeAssignments.find((a: any) => a.worker_id === tx.worker_id)?.workers as any)?.name || 'Bilinmiyor'
-      return { ...tx, worker_name: wName }
-    }) || []
+    // Flatten worker name onto transaction object
+    transactions = txs?.map(tx => ({
+      ...tx,
+      worker_name: (tx.assignments as any)?.workers?.name || 'Bilinmiyor'
+    })) || []
   }
 
   // 4. Get templates and all workers for the "Add Worker" dialog

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import {
   Plus, Calendar, FileJson, ChevronRight,
-  Trash2, Edit2, Users, Clock, Banknote, CheckCircle2, X, ExternalLink
+  Trash2, Edit2, Users, Clock, Banknote, CheckCircle2, ShoppingBag
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,40 @@ function calcWorkerPayment(worker: any) {
   const totalPayment = finalHours * hourlyWage
 
   return { totalHours: finalHours, totalPayment: Math.round(totalPayment) }
+}
+
+function calcWorkerRevenueDetails(worker: any, filterDate: 'today' | 'all') {
+  const assignments: any[] = worker.assignments ?? []
+  let total = 0
+  let nakit = 0
+  let iban = 0
+
+  let todayLocalStr = '';
+  if (filterDate === 'today') {
+    const d = new Date();
+    todayLocalStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  for (const a of assignments) {
+    const txs: any[] = a.transactions ?? []
+    for (const tx of txs) {
+      if (filterDate === 'today') {
+        if (!tx.created_at) continue;
+        const txDate = new Date(tx.created_at)
+        const txLocalStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}-${String(txDate.getDate()).padStart(2, '0')}`
+        if (txLocalStr !== todayLocalStr) continue
+      }
+
+      const amount = Number(tx.amount ?? 0)
+      total += amount
+      if (tx.payment_method === 'IBAN') {
+        iban += amount
+      } else {
+        nakit += amount
+      }
+    }
+  }
+  return { total, nakit, iban }
 }
 
 function formatMinutes(minutes: number) {
@@ -77,6 +111,9 @@ export function AdminDashboardHub({
   const [editName, setEditName] = useState('')
   const [editPin, setEditPin] = useState('')
   const [editWage, setEditWage] = useState('')
+
+  // Worker Revenue Filter
+  const [workerRevenueFilter, setWorkerRevenueFilter] = useState<'today' | 'all'>('today')
 
   // Template state
   const [templateItems, setTemplateItems] = useState([{ id: Math.random().toString(36).substring(7), name: '', price: 0, category: 'Genel' }])
@@ -204,8 +241,8 @@ export function AdminDashboardHub({
   const workerStats = useMemo(() =>
     workers
       .filter(w => w.is_active !== false)
-      .map(w => ({ ...w, ...calcWorkerPayment(w) })),
-    [workers]
+      .map(w => ({ ...w, ...calcWorkerPayment(w), revenueDetails: calcWorkerRevenueDetails(w, workerRevenueFilter) })),
+    [workers, workerRevenueFilter]
   )
 
   const filteredFairs = useMemo(() => {
@@ -468,17 +505,34 @@ export function AdminDashboardHub({
 
       {/* WORKERS SECTION */}
       <section>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-medium text-zinc-100 tracking-tight">Çalışanlar</h2>
             <Badge variant="secondary" className="rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
               {workers.length} kişi
             </Badge>
           </div>
-          <Dialog open={workerOpen} onOpenChange={setWorkerOpen}>
-            <DialogTrigger render={<Button variant="outline" className="rounded-full border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all h-10 px-5" />}>
-              <Plus className="w-4 h-4 mr-2" /> Yeni Çalışan
-            </DialogTrigger>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between w-full md:w-auto gap-4">
+            <div className="flex bg-zinc-900/80 p-1 rounded-xl border border-zinc-800 self-start sm:self-auto">
+              <button
+                onClick={() => setWorkerRevenueFilter('today')}
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${workerRevenueFilter === 'today' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                Bugün
+              </button>
+              <button
+                onClick={() => setWorkerRevenueFilter('all')}
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${workerRevenueFilter === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                Tümü
+              </button>
+            </div>
+
+            <Dialog open={workerOpen} onOpenChange={setWorkerOpen}>
+              <DialogTrigger render={<Button variant="outline" className="rounded-full border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all h-10 px-5 w-full sm:w-auto" />}>
+                <Plus className="w-4 h-4 mr-2" /> Yeni Çalışan
+              </DialogTrigger>
             <DialogContent className="sm:max-w-md rounded-3xl bg-zinc-950 border border-zinc-800 text-zinc-100">
               <DialogHeader>
                 <DialogTitle className="text-xl font-medium">Sisteme Çalışan Ekle</DialogTitle>
@@ -506,6 +560,7 @@ export function AdminDashboardHub({
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -552,7 +607,8 @@ export function AdminDashboardHub({
                 </CardHeader>
 
                 {/* Stats */}
-                <CardContent className="p-5 space-y-4">
+                <CardContent className="p-5 space-y-3">
+                  {/* Ödenmemiş Süre + Hakediş */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-zinc-900/60 rounded-2xl p-3 border border-zinc-800/50">
                       <div className="flex items-center gap-1.5 text-zinc-500 text-xs mb-1.5">
@@ -570,6 +626,30 @@ export function AdminDashboardHub({
                         {worker.totalPayment.toLocaleString('tr-TR')} <span className="text-sm font-normal">₺</span>
                       </p>
                     </div>
+                  </div>
+
+                  {/* Yaptığı Ciro — yatay satır, butonun hemen üstünde */}
+                  <div className="flex flex-col gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                        <ShoppingBag className="w-3 h-3 text-emerald-500/70" />
+                        <span>Ciro {workerRevenueFilter === 'today' ? '(Bugün)' : '(Tümü)'}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-emerald-400">
+                        {worker.revenueDetails.total.toLocaleString('tr-TR')} ₺
+                      </span>
+                    </div>
+                    
+                    {worker.revenueDetails.total > 0 && (
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-emerald-500/10">
+                        <span className="text-[11px] font-medium text-emerald-500/80 bg-emerald-500/10 px-2 py-0.5 rounded-md flex-1 text-center truncate">
+                          Nakit: {worker.revenueDetails.nakit.toLocaleString('tr-TR')} ₺
+                        </span>
+                        <span className="text-[11px] font-medium text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded-md flex-1 text-center truncate">
+                          IBAN: {worker.revenueDetails.iban.toLocaleString('tr-TR')} ₺
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {worker.totalPayment > 0 ? (

@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { endAssignment } from '@/app/actions/admin'
+import { endAssignment, addTransactionAsAdmin } from '@/app/actions/admin'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, ArrowLeft, StopCircle, FileJson, Store, UserCircle2, BarChart3, Minus, Trash2 } from 'lucide-react'
+import { Calendar, ArrowLeft, StopCircle, FileJson, Store, UserCircle2, BarChart3, Minus, Plus, Trash2, CreditCard, Banknote } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { StatsModal } from '@/components/admin/StatsModal'
@@ -40,6 +40,9 @@ export function FairControlCenter({
   const [filterDate, setFilterDate] = useState(() => todayLocal())
   const [mounted, setMounted] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  // Admin ürün ekleme state'i
+  const [addingItem, setAddingItem] = useState<{ id: string; name: string; price: number; category: string } | null>(null)
+  const [addingItemLoading, setAddingItemLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -50,23 +53,68 @@ export function FairControlCenter({
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchTransactionDetails = async (newTx: any) => {
-      const activeWorkerIds = assignments.filter(a => !a.end_time).map(a => a.worker_id)
-      if (activeWorkerIds.includes(newTx.worker_id)) {
-        setTransactions((prev: any[]) => [newTx, ...prev])
-        if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(50)
-      }
+    const fetchTransactionWithWorker = async (newTx: any) => {
+      const activeAssignmentIds = assignments.filter(a => !a.end_time).map(a => a.id)
+      if (!activeAssignmentIds.includes(newTx.assignment_id)) return
+
+      // Fetch worker name for the new transaction via assignment join
+      const { data: assignmentData } = await supabase
+        .from('assignments')
+        .select('workers(name)')
+        .eq('id', newTx.assignment_id)
+        .single()
+
+      const workerName = (assignmentData?.workers as any)?.name || 'Bilinmiyor'
+      const enrichedTx = { ...newTx, worker_name: workerName }
+
+      setTransactions((prev: any[]) => [enrichedTx, ...prev])
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(50)
     }
 
     const channel = supabase
-      .channel(`public:transactions`)
+      .channel(`public:transactions:fair-${fair.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions' }, (payload) => {
-        fetchTransactionDetails(payload.new)
+        fetchTransactionWithWorker(payload.new)
       })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [supabase, assignments])
+  }, [supabase, assignments, fair.id])
+
+  const handleAddItemTransaction = async (method: 'Nakit' | 'IBAN') => {
+    if (!addingItem) return
+    const item = addingItem
+    setAddingItem(null)
+    setAddingItemLoading(true)
+
+    // Optimistic: fake transaction to update UI instantly
+    const fakeTx = {
+      id: `tmp-${Date.now()}`,
+      assignment_id: '',
+      worker_id: '',
+      item_id: item.id,
+      item_name: item.name,
+      amount: item.price,
+      payment_method: method,
+      category: item.category,
+      created_at: new Date().toISOString(),
+      worker_name: 'Admin',
+    }
+    setTransactions((prev: any[]) => [fakeTx, ...prev])
+
+    const res = await addTransactionAsAdmin(fair.id, item.id, item.name, item.price, method, item.category)
+    setAddingItemLoading(false)
+
+    if (res.success) {
+      toast.success(`${item.name} (${method}) eklendi`, { description: `+${item.price} ₺` })
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(100)
+    } else {
+      // Revert optimistic
+      setTransactions((prev: any[]) => prev.filter(t => t.id !== fakeTx.id))
+      toast.error('Hata', { description: res.error })
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate([100, 50, 100])
+    }
+  }
 
   const handleStopWorker = async (assignmentId: string) => {
     if (!confirm('Bu çalışanı sahadan çekmek istediğinize emin misiniz?')) return
@@ -80,10 +128,12 @@ export function FairControlCenter({
   const handleDeleteLastItemTransaction = async (itemId: string, itemName: string) => {
     if (!confirm(`${itemName} için en son yapılan satışı iptal etmek istediğinize emin misiniz?`)) return
     
-    // Find the most recent transaction for this item in the filtered list
-    const txToDelete = filteredTransactions.find(tx => tx.item_id === itemId || tx.item_name === itemName)
+    // Gerçek DB kaydı olan (tmp- ile başlamayan) en son transaction'ı bul
+    const txToDelete = filteredTransactions.find(
+      tx => (tx.item_id === itemId || tx.item_name === itemName) && !String(tx.id).startsWith('tmp-')
+    )
     if (!txToDelete) {
-      toast.error('İptal edilecek satış bulunamadı.')
+      toast.error('İptal edilecek kayıtlı satış bulunamadı.')
       return
     }
 
@@ -99,6 +149,13 @@ export function FairControlCenter({
 
   const handleDeleteSpecificTransaction = async (txId: string) => {
     if (!confirm('Bu işlemi tamamen silmek istediğinize emin misiniz?')) return
+
+    // Optimistic (henüz DB'ye yazılmamış) kayıt — sadece local state'den kaldır
+    if (String(txId).startsWith('tmp-')) {
+      setTransactions(prev => prev.filter(t => t.id !== txId))
+      toast.success('İşlem iptal edildi.')
+      return
+    }
     
     const { error } = await supabase.from('transactions').delete().eq('id', txId)
     if (error) {
@@ -319,19 +376,30 @@ export function FairControlCenter({
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 text-right">
-                          <p className={`text-lg font-medium ${item.count > 0 ? 'text-indigo-400' : 'text-zinc-600'}`}>
+                        <div className="flex items-center gap-2 text-right">
+                          <p className={`text-lg font-medium min-w-[60px] text-right ${item.count > 0 ? 'text-indigo-400' : 'text-zinc-600'}`}>
                             {item.total.toLocaleString('tr-TR')} ₺
                           </p>
-                          {item.count > 0 && (
+                          {/* + Ekle butonu — her zaman görünür */}
+                          {item.price > 0 && (
                             <button
-                              onClick={() => handleDeleteLastItemTransaction(item.id, item.name)}
-                              className="w-9 h-9 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 hover:text-red-300 transition-colors flex-shrink-0"
-                              title="Son Satışı İptal Et"
+                              onClick={() => setAddingItem({ id: item.id, name: item.name, price: item.price, category: item.category || 'Genel' })}
+                              disabled={addingItemLoading}
+                              className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors flex-shrink-0 disabled:opacity-40"
+                              title="Satış Ekle"
                             >
-                              <Minus className="w-4 h-4" strokeWidth={2.5} />
+                              <Plus className="w-4 h-4" strokeWidth={2.5} />
                             </button>
                           )}
+                          {/* — Sil butonu — yalnızca count > 0 iken */}
+                          <button
+                            onClick={() => handleDeleteLastItemTransaction(item.id, item.name)}
+                            disabled={item.count === 0}
+                            className="w-9 h-9 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 hover:text-red-300 transition-colors flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed"
+                            title="Son Satışı İptal Et"
+                          >
+                            <Minus className="w-4 h-4" strokeWidth={2.5} />
+                          </button>
                         </div>
                       </div>
                     ))
@@ -372,6 +440,15 @@ export function FairControlCenter({
                             {tx.payment_method || 'Nakit'}
                           </span>
                         </div>
+                        {/* ✅ NEW: İşlemi Yapan */}
+                        {tx.worker_name && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <UserCircle2 className="w-3 h-3 text-zinc-600" />
+                            <span className="text-[10px] text-zinc-500">
+                              İşlemi Yapan: <span className="text-zinc-400 font-medium">{tx.worker_name}</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
@@ -402,6 +479,51 @@ export function FairControlCenter({
         initialFilterDate={filterDate}
         allWorkers={allWorkers}
       />
+
+      {/* Admin Ürün Ekleme — Ödeme Yöntemi Dialog */}
+      {addingItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setAddingItem(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-3xl bg-zinc-950 border border-zinc-800 overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-6 text-center border-b border-zinc-800/60 bg-zinc-900/30">
+              <p className="text-[11px] text-zinc-500 uppercase tracking-widest mb-1">Admin — Satış Ekle</p>
+              <h3 className="text-xl font-medium text-zinc-100">{addingItem.name}</h3>
+              <p className="text-sm text-zinc-400 mt-1">{addingItem.price.toLocaleString('tr-TR')} ₺</p>
+            </div>
+            {/* Buttons */}
+            <div className="flex p-4 gap-3">
+              <button
+                onClick={() => handleAddItemTransaction('Nakit')}
+                className="flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-emerald-950/40 border border-zinc-700 hover:border-emerald-700/50 text-zinc-100 transition-all"
+              >
+                <Banknote className="w-5 h-5 text-emerald-400" />
+                <span className="text-sm font-medium">Nakit</span>
+              </button>
+              <button
+                onClick={() => handleAddItemTransaction('IBAN')}
+                className="flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-indigo-950/40 border border-zinc-700 hover:border-indigo-700/50 text-zinc-100 transition-all"
+              >
+                <CreditCard className="w-5 h-5 text-indigo-400" />
+                <span className="text-sm font-medium">IBAN</span>
+              </button>
+            </div>
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setAddingItem(null)}
+                className="w-full py-2.5 rounded-xl text-zinc-500 hover:text-zinc-300 text-sm transition-colors border border-zinc-800 hover:border-zinc-700"
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

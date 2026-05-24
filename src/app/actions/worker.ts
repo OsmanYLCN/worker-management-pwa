@@ -78,14 +78,32 @@ export async function getTodayStats(assignmentId: string) {
 
   const supabase = await createClient()
 
+  // Bu assignment'ın ait olduğu fair_id'yi bul
+  const { data: assignment } = await supabase
+    .from('assignments')
+    .select('fair_id')
+    .eq('id', assignmentId)
+    .single()
+
+  if (!assignment) return { success: false, error: 'Assignment bulunamadı' }
+
+  // Aynı stant'ta (fair_id) çalışan TÜM aktif assignment'ları bul
+  const { data: fairAssignments } = await supabase
+    .from('assignments')
+    .select('id')
+    .eq('fair_id', assignment.fair_id)
+    .is('end_time', null)
+
+  const allAssignmentIds = fairAssignments?.map(a => a.id) || [assignmentId]
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  // Stanttaki TÜM çalışanların bugünkü işlemlerini çek (ortak kasa)
   const { data: transactions, error } = await supabase
     .from('transactions')
     .select('amount, item_id')
-    .eq('assignment_id', assignmentId)
-    .eq('worker_id', workerSession.worker.id)
+    .in('assignment_id', allAssignmentIds)
     .gte('created_at', today.toISOString())
 
   if (error) {
@@ -108,16 +126,14 @@ export async function getTodayStats(assignmentId: string) {
 export async function getAllActiveStands() {
   const supabase = await createClient()
 
-  // 1. O anda çalışan olan stantları (fair_id) bulalım
+  // 1. Tüm aktif assignment'ları (end_time null) çalışan adlarıyla birlikte çek
   const { data: activeAssignments } = await supabase
     .from('assignments')
-    .select('fair_id')
+    .select('fair_id, workers(name)')
     .is('end_time', null)
 
-  const occupiedStandIds = activeAssignments?.map(a => a.fair_id) || []
-
-  // 2. Tüm stantları çekelim
-  let query = supabase
+  // 2. Tüm stantları çek (şimdi HEPSİ gösterilecek, aktif olanlar da)
+  const { data: stands, error } = await supabase
     .from('fairs')
     .select(`
       id,
@@ -127,14 +143,18 @@ export async function getAllActiveStands() {
     `)
     .order('created_at', { ascending: false })
 
-  const { data: stands, error } = await query
-
   if (error) return { success: false, error: 'Stantlar alınamadı.' }
 
-  // 3. Dolu olan stantları listeden çıkaralım
-  const availableStands = stands?.filter(s => !occupiedStandIds.includes(s.id)) || []
+  // 3. Her stanta o anda içeride çalışanları ekle
+  const standsWithWorkers = (stands || []).map(stand => {
+    const activeWorkers = (activeAssignments || [])
+      .filter(a => a.fair_id === stand.id)
+      .map(a => (a.workers as any)?.name)
+      .filter(Boolean)
+    return { ...stand, activeWorkers }
+  })
 
-  return { success: true, stands: availableStands }
+  return { success: true, stands: standsWithWorkers }
 }
 
 export async function startAssignment(fairId: string, templateId: string) {

@@ -3,9 +3,9 @@
 
 -- 1. Fairs tablosunu Stand mantığına çevirme
 ALTER TABLE fairs 
-DROP COLUMN IF EXISTS event_date,
-DROP COLUMN IF EXISTS start_time,
-DROP COLUMN IF EXISTS end_time;
+-- DROP COLUMN IF EXISTS event_date,
+-- DROP COLUMN IF EXISTS start_time,
+-- DROP COLUMN IF EXISTS end_time;
 
 ALTER TABLE fairs 
 ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES templates(id) ON DELETE SET NULL;

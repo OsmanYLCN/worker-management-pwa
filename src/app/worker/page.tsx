@@ -7,7 +7,7 @@ import { LogOut, AlertCircle, UserCircle2 } from 'lucide-react'
 export default async function WorkerPage() {
   const session = await getWorkerSession()
   if (!session) {
-    return null // Middleware handles redirect
+    return null 
   }
 
   const workerName = session.worker?.name ?? session.name ?? 'Çalışan'

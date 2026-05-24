@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { recordTransaction, getTodayStats } from '@/app/actions/worker'
 import { workerLogout } from '@/app/actions/auth'
 import { SpecialSaleDialog } from '@/components/worker/SpecialSaleDialog'
 import { Button } from '@/components/ui/button'
-import { LogOut, ShoppingBag, Loader2, UserCircle2, Plus, Clock, Store, CreditCard, Banknote as BanknoteIcon } from 'lucide-react'
+import { LogOut, ShoppingBag, Loader2, UserCircle2, Plus, Store, CreditCard, Banknote as BanknoteIcon, Users } from 'lucide-react'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { createClient } from '@/lib/supabase/client'
 
 interface TemplateItem {
   id: string
@@ -45,12 +46,63 @@ export function WorkerDashboard({
 
   const templateItems: TemplateItem[] = assignment?.fair?.template?.items || assignment?.template?.items || []
 
-  async function refreshStats() {
+  // ─── Realtime Subscription (Ortak Kasa) ───────────────────────────────────
+  const supabase = createClient()
+  // Use a ref to avoid recreating the channel on every render
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  const refreshFromDB = useCallback(async () => {
+    if (!assignment?.id) return
     const res = await getTodayStats(assignment.id)
     if (res.success && res.stats) {
       setStats(res.stats)
       if (res.itemCounts) setItemCounts(res.itemCounts)
     }
+  }, [assignment?.id])
+
+  useEffect(() => {
+    if (!assignment?.id) return
+
+    // Get all assignment ids for this fair to subscribe correctly
+    // We listen on the whole transactions table filtered by assignment_id list via realtime
+    // The easiest approach: subscribe to all INSERTs on transactions table and filter client-side
+    const fairId = assignment?.fair?.id
+    if (!fairId) return
+
+    // Subscribe to new transactions on this fair's assignments
+    const channel = supabase
+      .channel(`fair-transactions-${fairId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'transactions',
+        },
+        (payload) => {
+          const newTx = payload.new as any
+          // Only react if it's from our own fair's assignments
+          // We can't easily filter by fair_id in realtime, so we refresh stats from server
+          // This is safe and avoids stale data
+          if (newTx.assignment_id !== assignment.id) {
+            // It might be from a colleague in the same stand — refresh aggregated stats
+            refreshFromDB()
+          }
+          // If it's from us, our optimistic update already handled it
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+
+    return () => {
+      supabase.removeChannel(channel)
+      channelRef.current = null
+    }
+  }, [assignment?.id, assignment?.fair?.id, refreshFromDB])
+
+  async function refreshStats() {
+    await refreshFromDB()
   }
 
   async function handleSaleClick(item: TemplateItem) {
@@ -156,23 +208,68 @@ export function WorkerDashboard({
               Şu anda açık stant bulunmuyor.
             </div>
           ) : (
-            availableStands.map(stand => (
-              <div key={stand.id} className="p-5 rounded-3xl bg-zinc-900/50 border border-zinc-800/60 hover:border-zinc-700/60 transition-colors flex flex-col gap-4">
-                <div>
-                  <h3 className="text-xl font-medium text-zinc-100">{stand.name}</h3>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    {stand.template ? `Çizelge: ${stand.template.name}` : 'Çizelge atanmamış'}
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => handleStartShift(stand.id, stand.template_id)}
-                  disabled={startingStandId === stand.id || !stand.template_id}
-                  className="w-full h-12 rounded-xl text-md font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_-5px_rgba(99,102,241,0.5)]"
+            availableStands.map(stand => {
+              const hasActiveWorkers = stand.activeWorkers && stand.activeWorkers.length > 0
+              return (
+                <div
+                  key={stand.id}
+                  className={`p-5 rounded-3xl border transition-colors flex flex-col gap-4 ${
+                    hasActiveWorkers
+                      ? 'bg-indigo-950/20 border-indigo-800/50 hover:border-indigo-700/60'
+                      : 'bg-zinc-900/50 border-zinc-800/60 hover:border-zinc-700/60'
+                  }`}
                 >
-                  {startingStandId === stand.id ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mesaiyi Başlat'}
-                </Button>
-              </div>
-            ))
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-xl font-medium text-zinc-100">{stand.name}</h3>
+                      {hasActiveWorkers && (
+                        <span className="flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-[10px] font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                          Aktif
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {stand.template ? `Çizelge: ${stand.template.name}` : 'Çizelge atanmamış'}
+                    </p>
+                    {/* Active workers badges */}
+                    {hasActiveWorkers && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                        <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                          <Users className="w-3 h-3" />
+                          Çalışanlar:
+                        </span>
+                        {stand.activeWorkers.map((workerNameInStand: string, i: number) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-medium"
+                          >
+                            {workerNameInStand}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button 
+                    onClick={() => handleStartShift(stand.id, stand.template_id)}
+                    disabled={startingStandId === stand.id || !stand.template_id}
+                    className={`w-full h-12 rounded-xl text-md font-medium text-white ${
+                      hasActiveWorkers
+                        ? 'bg-indigo-700 hover:bg-indigo-600 shadow-[0_0_15px_-5px_rgba(99,102,241,0.6)]'
+                        : 'bg-indigo-600 hover:bg-indigo-500 shadow-[0_0_15px_-5px_rgba(99,102,241,0.5)]'
+                    }`}
+                  >
+                    {startingStandId === stand.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : hasActiveWorkers ? (
+                      'Katıl — Mesaiyi Başlat'
+                    ) : (
+                      'Mesaiyi Başlat'
+                    )}
+                  </Button>
+                </div>
+              )
+            })
           )}
         </main>
       </div>
@@ -207,10 +304,11 @@ export function WorkerDashboard({
       <div className="px-5 py-5 border-b border-zinc-900">
         <div className="flex justify-between items-end">
           <div>
-            <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider mb-1">Stand Ciro</p>
+            <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider mb-1">Stant Ciro</p>
             <div className="text-4xl font-light text-zinc-100 tracking-tight">
               {stats.totalRevenue.toLocaleString('tr-TR')} <span className="text-xl text-zinc-600">₺</span>
             </div>
+            <p className="text-[10px] text-zinc-600 mt-1">Tüm çalışanların satışı dahil</p>
           </div>
           <div className="text-right flex flex-col items-end">
             <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider mb-1">Satış</p>

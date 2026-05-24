@@ -25,7 +25,8 @@ export async function getWorkersWithStats() {
       assignments(
         id, start_time, end_time, is_paid,
         fairs(id, name, template_id),
-        templates(id, name)
+        templates(id, name),
+        transactions(amount)
       )
     `)
     .order('created_at', { ascending: false })
@@ -276,3 +277,61 @@ export async function deleteLastTransaction(assignmentId: string, itemName: stri
   revalidatePath('/admin')
   return { success: true }
 }
+
+export async function addTransactionAsAdmin(
+  fairId: string,
+  itemId: string,
+  itemName: string,
+  amount: number,
+  paymentMethod: 'Nakit' | 'IBAN',
+  category: string
+) {
+  const supabase = await createClient()
+
+  // Stanttaki aktif assignment'ı bul (birden fazlaysa ilkini al)
+  const { data: activeAssignment } = await supabase
+    .from('assignments')
+    .select('id, worker_id')
+    .eq('fair_id', fairId)
+    .is('end_time', null)
+    .order('start_time', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Aktif assignment yoksa en son olanı kullan
+  let assignmentId: string
+  let workerId: string
+
+  if (activeAssignment) {
+    assignmentId = activeAssignment.id
+    workerId = activeAssignment.worker_id
+  } else {
+    const { data: lastAssignment } = await supabase
+      .from('assignments')
+      .select('id, worker_id')
+      .eq('fair_id', fairId)
+      .order('start_time', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!lastAssignment) return { success: false, error: 'Bu stanta ait görevlendirme bulunamadı.' }
+    assignmentId = lastAssignment.id
+    workerId = lastAssignment.worker_id
+  }
+
+  const { error } = await supabase.from('transactions').insert({
+    assignment_id: assignmentId,
+    worker_id: workerId,
+    item_id: itemId,
+    item_name: itemName,
+    amount,
+    payment_method: paymentMethod,
+    category,
+  })
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
