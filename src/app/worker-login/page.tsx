@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { workerLogin } from '@/app/actions/auth'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Delete, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -76,59 +75,45 @@ export default function WorkerLoginPage() {
           </div>
 
           {/* NumPad */}
-          <div className="grid grid-cols-3 gap-3 w-full max-w-[260px]">
+          <div className="grid grid-cols-3 gap-3 w-full max-w-[260px] relative z-20">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-              <Button
+              <button
                 key={num}
-                variant="outline"
-                className="h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer"
-                onPointerDown={(e) => {
-                  // onPointerDown gives instant feedback on touch devices
-                  // e.preventDefault(); // Prevents double firing if needed, but might break focus
-                  handleNumberClick(num.toString());
-                }}
-                onClick={(e) => {
-                  // Prevent double-firing if pointerDown already handled it
-                  e.preventDefault();
-                }}
+                type="button"
+                className="flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+                onClick={() => handleNumberClick(num.toString())}
                 disabled={loading || pin.length >= 4}
               >
                 {num}
-              </Button>
+              </button>
             ))}
             <div className="flex items-center justify-center"></div>
-            <Button
-              variant="outline"
-              className="h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer"
-              onPointerDown={() => handleNumberClick('0')}
-              onClick={(e) => e.preventDefault()}
+            <button
+              type="button"
+              className="flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+              onClick={() => handleNumberClick('0')}
               disabled={loading || pin.length >= 4}
             >
               0
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-16 rounded-2xl transition-all text-zinc-500 active:bg-zinc-800/50 md:hover:text-zinc-300 md:hover:bg-zinc-800/50 touch-manipulation cursor-pointer"
-              onPointerDown={() => handleDelete()}
-              onClick={(e) => e.preventDefault()}
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center h-16 rounded-2xl transition-all text-zinc-500 active:bg-zinc-800/50 md:hover:text-zinc-300 md:hover:bg-zinc-800/50 touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+              onClick={() => handleDelete()}
               disabled={loading || pin.length === 0}
             >
               <Delete className="w-7 h-7" />
-            </Button>
+            </button>
           </div>
 
-          <Button 
-            className={`w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 touch-manipulation cursor-pointer ${pin.length === 4 && !loading ? 'bg-indigo-600 active:bg-indigo-700 md:hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
-            onPointerDown={(e) => {
-              if (pin.length === 4 && !loading) {
-                handleSubmit();
-              }
-            }}
-            onClick={(e) => e.preventDefault()}
+          <button 
+            type="button"
+            className={`flex items-center justify-center w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none relative z-20 ${pin.length === 4 && !loading ? 'bg-indigo-600 active:bg-indigo-700 md:hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
+            onClick={handleSubmit}
             disabled={pin.length !== 4 || loading}
           >
             {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-          </Button>
+          </button>
 
         </CardContent>
       </Card>
