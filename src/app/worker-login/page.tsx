@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { workerLogin } from '@/app/actions/auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Delete, ArrowLeft } from 'lucide-react'
@@ -11,17 +11,20 @@ export default function WorkerLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleNumberClick = (num: string) => {
-    if (pin.length < 4) {
-      setPin(prev => prev + num)
-      setError(null)
-    }
-  }
+  const handleNumberClick = useCallback((num: string) => {
+    setPin(prev => {
+      if (prev.length < 4) {
+        setError(null)
+        return prev + num
+      }
+      return prev
+    })
+  }, [])
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     setPin(prev => prev.slice(0, -1))
     setError(null)
-  }
+  }, [])
 
   const handleSubmit = async () => {
     if (pin.length !== 4) {
@@ -49,7 +52,7 @@ export default function WorkerLoginPage() {
         </Link>
       </div>
 
-      <Card className="w-full max-w-sm bg-zinc-900/50 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-3xl p-2 z-10">
+      <Card className="w-full max-w-sm bg-zinc-900/50 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-3xl p-2 z-10 overflow-visible">
         <CardHeader className="text-center pb-2 pt-6">
           <CardTitle className="text-2xl font-medium text-zinc-100">Sahaya Giriş</CardTitle>
           <CardDescription className="text-zinc-500 font-light mt-1">Size özel 4 haneli PIN kodunu girin</CardDescription>
@@ -80,7 +83,11 @@ export default function WorkerLoginPage() {
               <button
                 key={num}
                 type="button"
-                className="flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+                className="numpad-btn flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-colors bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-700 md:hover:bg-zinc-800 md:hover:text-white disabled:opacity-50 disabled:pointer-events-none"
+                onTouchEnd={(e) => {
+                  e.preventDefault()
+                  if (!loading && pin.length < 4) handleNumberClick(num.toString())
+                }}
                 onClick={() => handleNumberClick(num.toString())}
                 disabled={loading || pin.length >= 4}
               >
@@ -90,7 +97,11 @@ export default function WorkerLoginPage() {
             <div className="flex items-center justify-center"></div>
             <button
               type="button"
-              className="flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+              className="numpad-btn flex items-center justify-center h-16 text-2xl font-light rounded-2xl transition-colors bg-zinc-900 border border-zinc-800 text-zinc-100 active:bg-zinc-700 md:hover:bg-zinc-800 md:hover:text-white disabled:opacity-50 disabled:pointer-events-none"
+              onTouchEnd={(e) => {
+                e.preventDefault()
+                if (!loading && pin.length < 4) handleNumberClick('0')
+              }}
               onClick={() => handleNumberClick('0')}
               disabled={loading || pin.length >= 4}
             >
@@ -98,7 +109,11 @@ export default function WorkerLoginPage() {
             </button>
             <button
               type="button"
-              className="flex items-center justify-center h-16 rounded-2xl transition-all text-zinc-500 active:bg-zinc-800/50 md:hover:text-zinc-300 md:hover:bg-zinc-800/50 touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+              className="numpad-btn flex items-center justify-center h-16 rounded-2xl transition-colors text-zinc-500 active:bg-zinc-800/50 md:hover:text-zinc-300 md:hover:bg-zinc-800/50 disabled:opacity-50 disabled:pointer-events-none"
+              onTouchEnd={(e) => {
+                e.preventDefault()
+                if (!loading && pin.length > 0) handleDelete()
+              }}
               onClick={() => handleDelete()}
               disabled={loading || pin.length === 0}
             >
@@ -108,7 +123,11 @@ export default function WorkerLoginPage() {
 
           <button 
             type="button"
-            className={`flex items-center justify-center w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 touch-manipulation cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none relative z-20 ${pin.length === 4 && !loading ? 'bg-indigo-600 active:bg-indigo-700 md:hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
+            className={`numpad-btn flex items-center justify-center w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none relative z-20 ${pin.length === 4 && !loading ? 'bg-indigo-600 active:bg-indigo-700 md:hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
+            onTouchEnd={(e) => {
+              e.preventDefault()
+              if (pin.length === 4 && !loading) handleSubmit()
+            }}
             onClick={handleSubmit}
             disabled={pin.length !== 4 || loading}
           >

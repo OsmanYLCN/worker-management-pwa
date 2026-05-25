@@ -365,10 +365,14 @@ export function WorkerDashboard({
               {/* + Button */}
               <div className="w-12 flex justify-center">
                 <button
+                  onTouchEnd={(e) => {
+                    e.preventDefault()
+                    if (!isLoading) handleSaleClick(item)
+                  }}
                   onClick={() => handleSaleClick(item)}
                   disabled={isLoading}
                   className={`
-                    w-10 h-10 rounded-xl flex items-center justify-center
+                    numpad-btn w-10 h-10 rounded-xl flex items-center justify-center
                     bg-indigo-600 hover:bg-indigo-500 active:scale-90
                     text-white transition-all duration-150
                     disabled:opacity-50 disabled:cursor-not-allowed
@@ -399,20 +403,32 @@ export function WorkerDashboard({
             <p className="text-sm text-zinc-400 mt-1">{paymentItem?.price} ₺</p>
           </div>
           <div className="flex p-4 gap-4">
-            <Button
-              className="flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100"
+            <button
+              type="button"
+              style={{ touchAction: 'manipulation' }}
+              className="numpad-btn flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-700 text-zinc-100 transition-colors"
+              onTouchEnd={(e) => {
+                e.preventDefault()
+                handleConfirmSale('Nakit')
+              }}
               onClick={() => handleConfirmSale('Nakit')}
             >
               <BanknoteIcon className="w-5 h-5 text-emerald-400" />
               <span>Nakit</span>
-            </Button>
-            <Button
-              className="flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100"
+            </button>
+            <button
+              type="button"
+              style={{ touchAction: 'manipulation' }}
+              className="numpad-btn flex-1 h-16 flex flex-col gap-1 items-center justify-center rounded-2xl bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-700 text-zinc-100 transition-colors"
+              onTouchEnd={(e) => {
+                e.preventDefault()
+                handleConfirmSale('IBAN')
+              }}
               onClick={() => handleConfirmSale('IBAN')}
             >
               <CreditCard className="w-5 h-5 text-indigo-400" />
               <span>IBAN</span>
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

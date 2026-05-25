@@ -126,5 +126,40 @@
   }
   html {
     @apply font-sans;
+    /* iOS Safari: disable tap delay for the entire document */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ── iOS Safari / Chrome Touch Fixes ──────────────────────────────── */
+
+/* Remove iOS tap highlight (blue/grey overlay) on all tappable elements */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea,
+label,
+.numpad-btn {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Ensure all interactive elements respond to touch immediately on iOS */
+button,
+[role="button"],
+.numpad-btn {
+  touch-action: manipulation;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Fix iOS momentum scroll not triggering click events inside scrollable areas */
+@supports (-webkit-overflow-scrolling: touch) {
+  body {
+    -webkit-overflow-scrolling: touch;
   }
 }
