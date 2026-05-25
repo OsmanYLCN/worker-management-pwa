@@ -81,8 +81,16 @@ export default function WorkerLoginPage() {
               <Button
                 key={num}
                 variant="outline"
-                className="h-16 text-2xl font-light rounded-2xl active:scale-95 transition-all bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white"
-                onClick={() => handleNumberClick(num.toString())}
+                className="h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer"
+                onPointerDown={(e) => {
+                  // onPointerDown gives instant feedback on touch devices
+                  // e.preventDefault(); // Prevents double firing if needed, but might break focus
+                  handleNumberClick(num.toString());
+                }}
+                onClick={(e) => {
+                  // Prevent double-firing if pointerDown already handled it
+                  e.preventDefault();
+                }}
                 disabled={loading || pin.length >= 4}
               >
                 {num}
@@ -91,16 +99,18 @@ export default function WorkerLoginPage() {
             <div className="flex items-center justify-center"></div>
             <Button
               variant="outline"
-              className="h-16 text-2xl font-light rounded-2xl active:scale-95 transition-all bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white"
-              onClick={() => handleNumberClick('0')}
+              className="h-16 text-2xl font-light rounded-2xl transition-all bg-zinc-900 border-zinc-800 text-zinc-100 active:bg-zinc-800 md:hover:bg-zinc-800 md:hover:text-white touch-manipulation cursor-pointer"
+              onPointerDown={() => handleNumberClick('0')}
+              onClick={(e) => e.preventDefault()}
               disabled={loading || pin.length >= 4}
             >
               0
             </Button>
             <Button
               variant="ghost"
-              className="h-16 rounded-2xl active:scale-95 transition-all text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
-              onClick={handleDelete}
+              className="h-16 rounded-2xl transition-all text-zinc-500 active:bg-zinc-800/50 md:hover:text-zinc-300 md:hover:bg-zinc-800/50 touch-manipulation cursor-pointer"
+              onPointerDown={() => handleDelete()}
+              onClick={(e) => e.preventDefault()}
               disabled={loading || pin.length === 0}
             >
               <Delete className="w-7 h-7" />
@@ -108,8 +118,13 @@ export default function WorkerLoginPage() {
           </div>
 
           <Button 
-            className={`w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 ${pin.length === 4 && !loading ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
-            onClick={handleSubmit}
+            className={`w-full h-14 text-lg font-medium rounded-xl transition-all duration-300 touch-manipulation cursor-pointer ${pin.length === 4 && !loading ? 'bg-indigo-600 active:bg-indigo-700 md:hover:bg-indigo-500 text-white shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)]' : 'bg-zinc-800 text-zinc-500'}`} 
+            onPointerDown={(e) => {
+              if (pin.length === 4 && !loading) {
+                handleSubmit();
+              }
+            }}
+            onClick={(e) => e.preventDefault()}
             disabled={pin.length !== 4 || loading}
           >
             {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
